@@ -9,11 +9,11 @@ import (
 func decodeURL(url string) (newUrl string, valid bool) {
 	statedata := ""
 	state := 0
-	for index, ch := range url {
+	for _, ch := range url {
 		switch state {
 		case 0:
-			// Some URLs have been observed with * instead of % encoded hex values
-			// It sometimes happens where the delimiters are encoded with, e.g., %2a
+			// Some URLs have been observed with * instead of % encoded hex values.
+			// It can happen where the delimiters are encoded as, e.g., %2a or %21.
 			if ch == '*' || ch == '%' {
 				state++
 			} else {
@@ -32,7 +32,6 @@ func decodeURL(url string) (newUrl string, valid bool) {
 				state = 0
 			}
 		}
-		index++
 	}
 	return newUrl, true
 }
