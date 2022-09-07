@@ -1,14 +1,48 @@
 package main
 
 import (
-	"fmt"
+	"encoding/hex"
 	"log"
 	"net/http"
 )
 
+func decodeURL(url string) (newUrl string, valid bool) {
+	statedata := ""
+	state := 0
+	for index, ch := range url {
+		switch state {
+		case 0:
+			// Some URLs have been observed with * instead of % encoded hex values
+			// It sometimes happens where the delimiters are encoded with, e.g., %2a
+			if ch == '*' || ch == '%' {
+				state++
+			} else {
+				newUrl = newUrl + string(ch)
+			}
+		case 1:
+			statedata = statedata + string(ch)
+			if 2 == len(statedata) {
+				decode, err := hex.DecodeString(statedata)
+				if err != nil {
+					return newUrl, false
+				} else {
+					newUrl = newUrl + string(decode)
+				}
+				statedata = ""
+				state = 0
+			}
+		}
+		index++
+	}
+	return newUrl, true
+}
+
 func handler(w http.ResponseWriter, r *http.Request) {
 	path := r.RequestURI
-	fmt.Printf(" [#] Decoding: %s\n", path)
+	// Decode the original URL so it can be parsed
+	log.Printf("Decoding: %s\n", path)
+	path, _ = decodeURL(path)
+	log.Printf("Parsing: %s\n", path)
 	if path[1] == '/' {
 		// Remove leading '/', if exists
 		path = path[1:]
@@ -92,7 +126,20 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			index++
 		}
 		if valid {
-			fmt.Printf(" [*] Redirecting to: %s\n", dsturl)
+			// Decode the parsed URL again in case an asterisk was decoded on the first round
+			log.Printf("Decoding: %s\n", dsturl)
+			dsturl, valid = decodeURL(dsturl)
+			if valid {
+				log.Printf("URL: %s\n", dsturl)
+				log.Printf("Tag: %s\n", metadata)
+			} else {
+				log.Printf("Unable to decode URL!\n")
+			}
+		} else {
+			log.Printf("Unable to decode client request!\n")
+		}
+		if valid {
+			log.Printf("Redirecting to: %s\n", dsturl)
 			// Send redirect with code 301 "permanently moved"
 			http.Redirect(w, r, dsturl, 301)
 		}
